@@ -56,7 +56,7 @@ jobs:
             echo "move_on=false" >> $GITHUB_ENV
             exit 0
           else
-            echo "⚠️ Tags differ!"
+            echo "⚠️ Tags differ! Compiling new version!"
             echo "tag_name=${{ env.latest_tag }}" >> $GITHUB_ENV
             echo "release_name=${{ env.release_name }}${{ env.latest_tag }}" >> $GITHUB_ENV
             exit 0
@@ -74,9 +74,9 @@ jobs:
         if: ${{ env.move_on == 'true' }}
         shell: bash
         run: |
-          git remote add origin https://gitlab.com/AOMediaCodec/SVT-AV1.git
+          git remote set-url origin https://gitlab.com/AOMediaCodec/SVT-AV1.git
           git fetch origin
-          git checkout origin/"${{ env.tag_name }}" -f
+          git checkout tags/"${{ env.tag_name }}" -f
 
       - name: Build SVT-AV1 x64
         if: ${{ env.move_on == 'true' }}
@@ -114,20 +114,20 @@ jobs:
         if: ${{ env.move_on == 'true' }}
         uses: actions/upload-artifact@v5
         with:
-          name: lib
+          name: SVT-AV1-ENC
           path: |
             SVT-AV1-windows-x64.7z
             SVT-AV1-windows-x86.7z
 
       - name: Create Release
-        if: github.event_name == 'release' && ${{ env.move_on == 'true' }}
+        if: ${{ env.move_on == 'true' }}
         id: create_release
         uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ github.event.release.tag_name }}
-          name: ${{ github.event.release.name }}
+          tag_name: ${{ env.tag_name }}
+          name: ${{ env.release_name }}
           draft: false
           prerelease: false
           files: |
