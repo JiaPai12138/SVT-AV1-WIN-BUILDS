@@ -1,0 +1,135 @@
+name: Build SVT-AV1 binaries for Windows
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'
+  workflow_dispatch: # 允许手动触发
+
+jobs:
+  build:
+    runs-on: windows-2022
+
+    strategy:
+      fail-fast: true
+
+    env:
+      has_release: true
+      tag_name: ""
+      release_name: "Release "
+      latest_tag: ""
+      move_on: true
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Get latest release info
+        id: released
+        shell: bash
+        run: |
+          response=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/latest)
+
+          if echo "$response" | grep -q "Not Found"; then
+            echo "has_release=false" >> $GITHUB_ENV
+          else
+            echo "has_release=true" >> $GITHUB_ENV
+            echo "tag_name=$(echo "$response" | jq -r .tag_name)" >> $GITHUB_ENV
+            echo "release_name=$(echo "$response" | jq -r .name)" >> $GITHUB_ENV
+          fi
+
+      - name: Get latest GitLab release tag
+        id: get_latest_tag
+        shell: bash
+        run: |
+          latest_tag=$(curl -s "https://gitlab.com/api/v4/projects/24327400/releases" \
+                        | jq -r '.[0].tag_name')
+
+          echo "latest_tag=$latest_tag" >> $GITHUB_ENV
+
+      - name: Compare GitHub and GitLab release tags
+        shell: bash
+        run: |
+          echo "GitHub tag: ${{ env.tag_name }}"
+          echo "GitLab tag: ${{ env.latest_tag }}"
+
+          if [ "${{ env.tag_name }}" = "${{ env.latest_tag }}" ]; then
+            echo "move_on=false" >> $GITHUB_ENV
+            exit 0
+          else
+            echo "⚠️ Tags differ!"
+            echo "tag_name=${{ env.latest_tag }}" >> $GITHUB_ENV
+            echo "release_name=${{ env.release_name }}${{ env.latest_tag }}" >> $GITHUB_ENV
+            exit 0
+          fi
+
+      - name: Setup NASM
+        if: ${{ env.move_on == 'true' }}
+        uses: ilammy/setup-nasm@v1
+
+      - name: Add MSBuild to PATH
+        if: ${{ env.move_on == 'true' }}
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Fetch remote code
+        if: ${{ env.move_on == 'true' }}
+        shell: bash
+        run: |
+          git remote add origin https://gitlab.com/AOMediaCodec/SVT-AV1.git
+          git fetch origin
+          git checkout origin/"${{ env.tag_name }}" -f
+
+      - name: Build SVT-AV1 x64
+        if: ${{ env.move_on == 'true' }}
+        shell: cmd
+        run: |
+          mkdir build64
+          cd build64
+
+          cmake .. -G "Visual Studio 17 2022" -A x64 -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTING=OFF -DENABLE_AVX512=ON -DBUILD_APPS=OFF -DSVT_AV1_LTO=ON -DCMAKE_C_FLAGS_RELEASE="/GL /O2 /Ot" -DCMAKE_STATIC_LINKER_FLAGS_RELEASE="/LTCG"
+          msbuild .\svt-av1.sln /p:Configuration=Release /p:Platform=x64
+
+          cd ..
+          7z a -t7z -m0=LZMA2 -mmt=on -mx=3 -md=4m -mfb=32 -ms=1g -mqs=on -sccUTF-8 -mtc=on -mta=on -mhe=on ^
+            SVT-AV1-windows-x64.7z ^
+            Bin Source\API
+
+      - name: Build SVT-AV1 x86
+        if: ${{ env.move_on == 'true' }}
+        shell: cmd
+        run: |
+          rd /s /q Bin
+
+          mkdir build86
+          cd build86
+
+          cmake .. -G "Visual Studio 17 2022" -A Win32 -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTING=OFF -DENABLE_AVX512=ON -DBUILD_APPS=OFF -DSVT_AV1_LTO=ON -DCMAKE_C_FLAGS_RELEASE="/GL /O2 /Ot" -DCMAKE_STATIC_LINKER_FLAGS_RELEASE="/LTCG"
+          msbuild .\svt-av1.sln /p:Configuration=Release /p:Platform=Win32
+
+          cd ..
+          7z a -t7z -m0=LZMA2 -mmt=on -mx=3 -md=4m -mfb=32 -ms=1g -mqs=on -sccUTF-8 -mtc=on -mta=on -mhe=on ^
+            SVT-AV1-windows-x86.7z ^
+            Bin Source\API
+
+      - name: Upload artifact
+        if: ${{ env.move_on == 'true' }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: lib
+          path: |
+            SVT-AV1-windows-x64.7z
+            SVT-AV1-windows-x86.7z
+
+      - name: Create Release
+        if: github.event_name == 'release' && ${{ env.move_on == 'true' }}
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          name: ${{ github.event.release.name }}
+          draft: false
+          prerelease: false
+          files: |
+            ./SVT-AV1-windows-x64.7z
+            ./SVT-AV1-windows-x86.7z
