@@ -112,7 +112,7 @@ jobs:
 
       - name: Upload artifact
         if: ${{ env.move_on == 'true' }}
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: SVT-AV1-ENC
           path: |
