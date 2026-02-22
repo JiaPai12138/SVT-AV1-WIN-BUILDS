@@ -58,7 +58,7 @@ jobs:
           else
             echo "⚠️ Tags differ! Compiling new version!"
             echo "tag_name=${{ env.latest_tag }}" >> $GITHUB_ENV
-            echo "release_name=${{ env.release_name }}${{ env.latest_tag }}" >> $GITHUB_ENV
+            echo "release_name=Release ${{ env.latest_tag }}" >> $GITHUB_ENV
             exit 0
           fi
 
