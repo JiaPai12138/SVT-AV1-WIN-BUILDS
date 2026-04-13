@@ -68,7 +68,7 @@ jobs:
 
       - name: Add MSBuild to PATH
         if: ${{ env.move_on == 'true' }}
-        uses: microsoft/setup-msbuild@v2
+        uses: microsoft/setup-msbuild@v3
 
       - name: Fetch remote code
         if: ${{ env.move_on == 'true' }}
@@ -112,7 +112,7 @@ jobs:
 
       - name: Upload artifact
         if: ${{ env.move_on == 'true' }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: SVT-AV1-ENC
           path: |
@@ -122,7 +122,7 @@ jobs:
       - name: Create Release
         if: ${{ env.move_on == 'true' }}
         id: create_release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
